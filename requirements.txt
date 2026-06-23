@@ -1,0 +1,5 @@
+python-chess>=1.11
+
+# Optional: to play the agent against a strong engine
+#   (python3 play_chess.py --opponent stockfish)
+# install the Stockfish binary separately, e.g.:  brew install stockfish
