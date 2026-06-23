@@ -196,3 +196,4 @@ is heavily handicapped — Stockfish is a different league. It's there so you ca
   NumPy/PyTorch) for a non-linear evaluator.
 - Grow the single frozen opponent into a full *league* of many past checkpoints
   (sample an opponent each game) for more robust self-play.
+# chess
