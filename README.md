@@ -28,6 +28,7 @@ learning chess, not a Stockfish competitor.
 | [`td_agent.py`](td_agent.py) | The agent: a linear value function `V(s) = w · features(s)`, 1-ply move selection, and the TD(0) learning update. |
 | [`train_chess.py`](train_chess.py) | Self-play training loop (learner vs a frozen snapshot of itself), evaluation vs a random opponent, learning curve, saves weights. |
 | [`play_chess.py`](play_chess.py) | Play against the trained agent, or watch it. |
+| [`chess_rl.py`](chess_rl.py) | One entry point that ties it together: `chess_rl.py train` / `chess_rl.py play`. |
 
 **Tabula rasa — only rules + reward.** The agent is given *no* chess knowledge.
 Its value function `V(s)` is a weighted sum over a **pure piece-square encoding**:
@@ -77,13 +78,19 @@ pip3 install python-chess          # the only dependency
 
 ## Train
 
+Everything runs through one command, `chess_rl.py` (with `train` / `play`):
+
 ```bash
-python3 train_chess.py                       # ~1500 self-play games
-python3 train_chess.py --episodes 3000       # train longer for sharper play
-python3 train_chess.py --refresh 100          # freeze the self-play opponent longer
-python3 train_chess.py --max-plies 120        # re-impose a ply cap (default 0 = none)
-python3 train_chess.py --init chess_weights.pkl --out v2.pkl   # keep improving an already-trained model
+python3 chess_rl.py train                     # train CONTINUOUSLY until you press Ctrl-C
+python3 chess_rl.py train --episodes 3000     # or train a fixed number of games
+python3 chess_rl.py train --refresh 100       # freeze the self-play opponent longer
+python3 chess_rl.py train --init chess_weights.pkl --out v2.pkl   # keep improving a model
 ```
+
+By default training **never stops on its own** — it runs game after game,
+autosaving to `--out` every `--save-every` games (default 200), until you press
+**Ctrl-C**, at which point it finishes the current game, saves, and prints a
+summary. (Pass `--episodes N` if you'd rather it stop after N games.)
 
 `--init` warm-starts from an existing model and keeps training it (the self-play
 opponent also starts from that model) — so you can train in rounds, each one
@@ -95,22 +102,23 @@ You can train *against the Stockfish engine* instead of self-play, at
 **progressively higher difficulty**:
 
 ```bash
-python3 train_chess.py --opponent stockfish                          # ramp up to skill 20
-python3 train_chess.py --opponent stockfish --sf-skill-max 8 --episodes 3000
-python3 train_chess.py --opponent stockfish --sf-depth-max 4         # also deepen search at the top
-python3 train_chess.py --init chess_weights.pkl --opponent stockfish --out vs_sf.pkl
+python3 chess_rl.py train --opponent stockfish                       # ramp up to skill 20
+python3 chess_rl.py train --opponent stockfish --sf-skill-max 8 --ramp-every 300
+python3 chess_rl.py train --opponent stockfish --sf-depth-max 4       # also deepen search at the top
+python3 chess_rl.py train --init chess_weights.pkl --opponent stockfish --out vs_sf.pkl
 ```
 
-Stockfish starts near-random and steps up a difficulty **ladder** over the course
-of training:
+Stockfish starts near-random and steps up a difficulty **ladder** as training
+proceeds:
 
 ```
 nodes=1 -> nodes=30 -> nodes=200 -> skill 0 -> skill 1 -> ... -> skill <sf-skill-max>
         -> (then deepen search up to --sf-depth-max)
 ```
 
-The ramp is spread evenly across `--episodes`, so the agent meets each rung in
-turn and you'll see `↑ difficulty up` messages as it climbs. The first rungs are
+It moves up one rung every `--ramp-every` games (auto-chosen if you don't set it;
+works with continuous training too), and you'll see `↑ difficulty up` messages as
+it climbs. The first rungs are
 deliberately near-random because this 1-ply agent *hangs pieces* (its evaluation
 doesn't see recaptures), so even Stockfish with a 1-node search punishes it — it
 needs an easy floor to get any positive signal.
@@ -139,8 +147,8 @@ inferred from reward alone** — they come out in the right order
 ## Play against it
 
 ```bash
-python3 play_chess.py --human                    # you are White, agent is Black
-python3 play_chess.py --human --agent-color white  # agent moves first; you are Black
+python3 chess_rl.py play --human                     # you are White, agent is Black
+python3 chess_rl.py play --human --agent-color white # agent moves first; you are Black
 ```
 
 **No chess notation needed.** On your turn it lists every legal move as a
@@ -162,10 +170,10 @@ never stops early.
 ## Watch it play
 
 ```bash
-python3 play_chess.py                      # agent (White) vs random (Black)
-python3 play_chess.py --color black
-python3 play_chess.py --games 3
-python3 play_chess.py --opponent self      # the trained agent vs itself
+python3 chess_rl.py play                      # agent (White) vs random (Black)
+python3 chess_rl.py play --color black
+python3 chess_rl.py play --games 3
+python3 chess_rl.py play --opponent self      # the trained agent vs itself
 ```
 
 It prints the board after every move (in algebraic notation), flags captures and
@@ -177,10 +185,10 @@ You can pit the agent against **Stockfish**, a world-class engine — a real
 "AI that knows how to play well":
 
 ```bash
-brew install stockfish                                  # one-time
-python3 play_chess.py --opponent stockfish              # capped to ~1350 Elo, 100 ms/move
-python3 play_chess.py --opponent stockfish --elo 2200 --engine-ms 300
-python3 play_chess.py --opponent stockfish --engine-path /path/to/stockfish
+brew install stockfish                                     # one-time
+python3 chess_rl.py play --opponent stockfish              # capped to ~1350 Elo, 100 ms/move
+python3 chess_rl.py play --opponent stockfish --elo 2200 --engine-ms 300
+python3 chess_rl.py play --opponent stockfish --engine-path /path/to/stockfish
 ```
 
 `--elo` caps Stockfish's strength (min ~1320) and `--engine-ms` sets its thinking

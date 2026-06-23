@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import random
 import shutil
+import signal
 
 import chess
 import chess.engine
@@ -259,6 +260,18 @@ def train(args):
     print(f"Training {how_many} vs {opp_txt} ({limit_txt}); "
           f"autosaving to {args.out} every {args.save_every} games...\n")
 
+    # Stop cleanly on Ctrl-C: finish the current game, then save and report.
+    stop = {"requested": False}
+
+    def _request_stop(*_):
+        if not stop["requested"]:
+            print("\n(stop requested — finishing this game, then saving...)")
+        stop["requested"] = True
+    try:
+        signal.signal(signal.SIGINT, _request_stop)
+    except (ValueError, OSError):
+        pass  # not in the main thread; KeyboardInterrupt fallback still applies
+
     meta = {
         "max_plies": 0,  # playback is always uncapped (games run to a real result)
         "representation": "piece-square-tied-384",
@@ -267,7 +280,7 @@ def train(args):
     curve = []
     ep = 0
     try:
-        while forever or ep < args.episodes:
+        while (forever or ep < args.episodes) and not stop["requested"]:
             ep += 1
             # Curriculum: step Stockfish up the difficulty ladder as training proceeds.
             if ladder is not None:
